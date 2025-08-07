@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -12,7 +12,7 @@ from har_analyzer.config import HARAnalyzerConfig
 
 
 @pytest.fixture
-def sample_har_data() -> Dict[str, Any]:
+def sample_har_data() -> dict[str, Any]:
     """Create sample HAR data for testing."""
     return {
         "log": {
@@ -65,7 +65,7 @@ def sample_har_data() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def sample_har_file(sample_har_data: Dict[str, Any], tmp_path: Path) -> Path:
+def sample_har_file(sample_har_data: dict[str, Any], tmp_path: Path) -> Path:
     """Create a temporary HAR file for testing."""
     har_file = tmp_path / "test.har"
     with open(har_file, "w", encoding="utf-8") as f:

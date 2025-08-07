@@ -1,7 +1,7 @@
 """Utility functions for HAR Analyzer."""
 
 from datetime import datetime
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 import psutil
 
@@ -101,7 +101,7 @@ def categorize_resource_type(mime_type: str, url: str) -> str:
         return "Other"
 
 
-def safe_get(data: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+def safe_get(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
     """Safely get nested dictionary values.
 
     Args:

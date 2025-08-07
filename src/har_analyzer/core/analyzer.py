@@ -1,7 +1,7 @@
 """Main HAR analyzer module."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -33,10 +33,10 @@ class HARAnalyzer:
 
         # Analysis results
         self.data: Optional[pd.DataFrame] = None
-        self.metadata: Optional[Dict[str, Any]] = None
-        self.analysis_results: Optional[Dict[str, Any]] = None
+        self.metadata: Optional[dict[str, Any]] = None
+        self.analysis_results: Optional[dict[str, Any]] = None
 
-    def analyze_file(self, har_file_path: Path) -> Dict[str, Any]:
+    def analyze_file(self, har_file_path: Path) -> dict[str, Any]:
         """Analyze a HAR file and generate comprehensive results.
 
         Args:
@@ -68,7 +68,7 @@ class HARAnalyzer:
             self.logger.error(f"Analysis failed: {e}")
             raise HARAnalyzerError(f"Analysis failed: {e}")
 
-    def _perform_analysis(self) -> Dict[str, Any]:
+    def _perform_analysis(self) -> dict[str, Any]:
         """Perform comprehensive performance analysis.
 
         Returns:
@@ -136,7 +136,7 @@ class HARAnalyzer:
             "resource_breakdown": self._calculate_resource_breakdown(),
         }
 
-    def _calculate_resource_breakdown(self) -> Dict[str, Any]:
+    def _calculate_resource_breakdown(self) -> dict[str, Any]:
         """Calculate detailed resource breakdown.
 
         Returns:
@@ -221,7 +221,7 @@ HAR Analysis Summary
 ===================
 
 📊 Total Requests: {basic['total_requests']:,}
-⏱️ Total Load Time: {basic['total_time_ms']/1000:.1f} seconds  
+⏱️ Total Load Time: {basic['total_time_ms']/1000:.1f} seconds
 📦 Total Data Size: {basic['total_size_kb']/1024:.1f} MB
 🎯 Average Response: {basic['avg_response_time_ms']:.0f}ms
 

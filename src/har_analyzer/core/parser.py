@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -28,8 +28,8 @@ class HARParser:
         """
         self.logger = get_logger(__name__)
         self.memory_limit_mb = memory_limit_mb
-        self._data: Optional[Dict[str, Any]] = None
-        self._entries: Optional[List[Dict[str, Any]]] = None
+        self._data: Optional[dict[str, Any]] = None
+        self._entries: Optional[list[dict[str, Any]]] = None
 
     def parse_file(self, file_path: Path) -> pd.DataFrame:
         """Parse HAR file and return structured data.
@@ -98,7 +98,7 @@ class HARParser:
 
         return pd.DataFrame(data)
 
-    def _process_entry(self, entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _process_entry(self, entry: dict[str, Any]) -> Optional[dict[str, Any]]:
         """Process a single HAR entry.
 
         Args:
@@ -186,7 +186,7 @@ class HARParser:
             self.logger.warning(f"Error processing entry: {e}")
             return None
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Get HAR file metadata.
 
         Returns:

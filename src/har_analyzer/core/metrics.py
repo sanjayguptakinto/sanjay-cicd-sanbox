@@ -1,6 +1,6 @@
 """Performance metrics calculation module."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -71,7 +71,7 @@ class PerformanceMetrics:
 
         return summary.reset_index()
 
-    def calculate_percentiles(self, df: pd.DataFrame) -> Dict[str, float]:
+    def calculate_percentiles(self, df: pd.DataFrame) -> dict[str, float]:
         """Calculate response time percentiles.
 
         Args:
@@ -90,7 +90,7 @@ class PerformanceMetrics:
 
     def get_top_resources(
         self, df: pd.DataFrame, metric: str, n: int = 5
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame]:
         """Get top N resources by metric for each resource type.
 
         Args:
@@ -113,7 +113,7 @@ class PerformanceMetrics:
 
         return top_resources
 
-    def calculate_performance_grade(self, df: pd.DataFrame) -> Tuple[str, str, str]:
+    def calculate_performance_grade(self, df: pd.DataFrame) -> tuple[str, str, str]:
         """Calculate overall performance grade.
 
         Args:
@@ -153,7 +153,7 @@ class PerformanceMetrics:
                 "Poor performance affecting user experience. Immediate optimization required.",
             )
 
-    def calculate_core_web_vitals(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def calculate_core_web_vitals(self, df: pd.DataFrame) -> dict[str, Any]:
         """Calculate Core Web Vitals metrics approximation.
 
         Args:
@@ -189,7 +189,7 @@ class PerformanceMetrics:
             "note": "These are approximations based on HAR data. Real Core Web Vitals require browser performance APIs.",
         }
 
-    def analyze_timing_breakdown(self, df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
+    def analyze_timing_breakdown(self, df: pd.DataFrame) -> dict[str, dict[str, float]]:
         """Analyze timing breakdown by phase.
 
         Args:
@@ -218,7 +218,7 @@ class PerformanceMetrics:
             "totals": timing_df.sum().to_dict(),
         }
 
-    def detect_performance_issues(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+    def detect_performance_issues(self, df: pd.DataFrame) -> list[dict[str, Any]]:
         """Detect common performance issues.
 
         Args:
