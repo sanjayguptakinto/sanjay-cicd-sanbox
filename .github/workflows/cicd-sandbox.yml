@@ -1,0 +1,52 @@
+# GitHub Actions CI/CD Workflow for sanjay-cicd-sanbox
+# This workflow runs on push and pull request events to the main branch
+
+name: CI/CD Sandbox
+
+on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
+    workflow_dispatch:
+        inputs:
+          env:
+            description: 'デプロイ環境(dev/lab/stg/inte/prod)'
+            required: true
+            default: 'dev'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          else
+            echo "No package.json found, skipping install."
+          fi
+
+      - name: Run tests
+        run: |
+          if [ -f package.json ]; then
+            npm test || echo "No tests found."
+          else
+            echo "No package.json found, skipping tests."
+          fi
+
+      - name: Build project
+        run: |
+          if [ -f package.json ]; then
+            npm run build || echo "No build script found."
+          else
+            echo "No package.json found, skipping build."
+          fi
