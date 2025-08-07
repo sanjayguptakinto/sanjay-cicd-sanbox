@@ -62,8 +62,8 @@ jobs:
       - name: Linting (Ruff)
         run: ruff check src/ tests/
 
-    #   - name: Type checking (MyPy)
-    #     run: python -m mypy src/
+      - name: Type checking (MyPy)
+        run: python -m mypy src/
 
       - name: Run unit tests
         run: |
@@ -160,19 +160,47 @@ jobs:
 
       - name: Install package from wheel
         run: |
+          # Install the package and its dependencies
           pip install dist/*.whl
+          # Verify installation and diagnose any issues
+          python -c "
+          try:
+              import har_analyzer
+              print('✅ Package installed successfully')
+              print('✅ Main module imported')
+              from har_analyzer.reports import PDFReportGenerator
+              print('✅ Reports module imported successfully')
+          except ImportError as e:
+              print(f'❌ Import error: {e}')
+              import sys
+              print(f'Python path: {sys.path}')
+              import os
+              import site
+              print(f'Site packages: {site.getsitepackages()}')
+              raise
+          "
 
       - name: Run integration tests
         run: |
           # Test CLI interface
+          echo "Testing CLI help and version..."
           har-analyzer --help
           har-analyzer --version
           
-          # Create a minimal test HAR file
-          echo '{"log":{"version":"1.2","creator":{"name":"Test","version":"1.0"},"entries":[]}}' > test.har
+          # Create a minimal test HAR file with proper structure
+          cat > test.har << 'EOF'
+          {
+            "log": {
+              "version": "1.2",
+              "creator": {"name": "Test", "version": "1.0"},
+              "entries": []
+            }
+          }
+          EOF
           
           # Test with sample HAR file
-          har-analyzer test.har --output-dir test_output --no-report || echo "Integration test completed"
+          echo "Testing HAR analysis..."
+          har-analyzer test.har --output-dir test_output --no-report || echo "Integration test completed with errors"
 
       - name: Upload test outputs
         uses: actions/upload-artifact@v4
@@ -203,8 +231,55 @@ jobs:
 
       - name: Run performance benchmarks
         run: |
-          # Create a test HAR file with some entries for performance testing
-          echo '{"log":{"version":"1.2","creator":{"name":"Test","version":"1.0"},"entries":[{"request":{"url":"https://example.com","method":"GET"},"response":{"status":200,"statusText":"OK","headers":[],"content":{"size":1024,"mimeType":"text/html"}},"time":100,"timings":{"blocked":1,"dns":1,"connect":1,"send":1,"wait":95,"receive":1}}]}}' > perf_test.har
+          # Create a test HAR file with proper required fields for performance testing
+          cat > perf_test.har << 'EOF'
+          {
+            "log": {
+              "version": "1.2",
+              "creator": {"name": "Test", "version": "1.0"},
+              "entries": [
+                {
+                  "startedDateTime": "2024-01-01T00:00:00.000Z",
+                  "time": 100,
+                  "request": {
+                    "method": "GET",
+                    "url": "https://example.com",
+                    "httpVersion": "HTTP/1.1",
+                    "headers": [],
+                    "queryString": [],
+                    "cookies": [],
+                    "headersSize": 200,
+                    "bodySize": 0
+                  },
+                  "response": {
+                    "status": 200,
+                    "statusText": "OK",
+                    "httpVersion": "HTTP/1.1",
+                    "headers": [],
+                    "cookies": [],
+                    "content": {
+                      "size": 1024,
+                      "mimeType": "text/html"
+                    },
+                    "redirectURL": "",
+                    "headersSize": 150,
+                    "bodySize": 1024
+                  },
+                  "cache": {},
+                  "timings": {
+                    "blocked": 1,
+                    "dns": 1,
+                    "connect": 1,
+                    "send": 1,
+                    "wait": 95,
+                    "receive": 1,
+                    "ssl": -1
+                  }
+                }
+              ]
+            }
+          }
+          EOF
           
           echo "Running performance test..."
           time python -c "
