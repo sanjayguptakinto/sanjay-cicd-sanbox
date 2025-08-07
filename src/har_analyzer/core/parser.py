@@ -72,7 +72,10 @@ class HARParser:
         Returns:
             DataFrame with processed HAR data
         """
-        data = []
+        data: list[dict[str, Any]] = []
+        if self._entries is None:
+            return pd.DataFrame(data)
+
         total_entries = len(self._entries)
 
         for i, entry in enumerate(self._entries):

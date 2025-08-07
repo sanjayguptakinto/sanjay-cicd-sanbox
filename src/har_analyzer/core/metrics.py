@@ -54,20 +54,22 @@ class PerformanceMetrics:
         )
 
         # Flatten column names
-        summary.columns = [
-            "requests_count",
-            "avg_response_time_ms",
-            "max_response_time_ms",
-            "min_response_time_ms",
-            "std_response_time_ms",
-            "p90_response_time_ms",
-            "p95_response_time_ms",
-            "total_size_kb",
-            "avg_size_kb",
-            "max_size_kb",
-            "min_size_kb",
-            "success_rate_percent",
-        ]
+        summary.columns = pd.Index(
+            [
+                "requests_count",
+                "avg_response_time_ms",
+                "max_response_time_ms",
+                "min_response_time_ms",
+                "std_response_time_ms",
+                "p90_response_time_ms",
+                "p95_response_time_ms",
+                "total_size_kb",
+                "avg_size_kb",
+                "max_size_kb",
+                "min_size_kb",
+                "success_rate_percent",
+            ]
+        )
 
         return summary.reset_index()
 
