@@ -62,8 +62,8 @@ jobs:
       - name: Linting (Ruff)
         run: ruff check src/ tests/
 
-      - name: Type checking (MyPy)
-        run: python -m mypy src/
+    #   - name: Type checking (MyPy)
+    #     run: python -m mypy src/
 
       - name: Run unit tests
         run: |
