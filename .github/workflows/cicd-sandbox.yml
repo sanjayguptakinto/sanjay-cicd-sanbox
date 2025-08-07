@@ -63,7 +63,7 @@ jobs:
         run: ruff check src/ tests/
 
       - name: Type checking (MyPy)
-        run: mypy src/
+        run: python -m mypy src/
 
       - name: Run unit tests
         run: |

@@ -44,6 +44,10 @@ dev = [
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "bandit>=1.7.0",
+    "types-psutil>=7.0.0",
+    "types-PyYAML>=6.0.0",
+    "pandas-stubs>=2.0.0",
+    "types-seaborn>=0.13.0",
 ]
 test = [
     "pytest>=7.0.0",
@@ -114,6 +118,9 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_return_any = true
+# Ignore missing imports for libraries that don't have stubs
+# Note: Type stubs are installed via dev dependencies
+ignore_missing_imports = false
 
 [tool.pytest.ini_options]
 minversion = "7.0"
