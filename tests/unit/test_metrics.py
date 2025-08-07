@@ -3,8 +3,8 @@
 import pandas as pd
 import pytest
 
-from har_analyzer.core.metrics import PerformanceMetrics
 from har_analyzer.config import PerformanceThresholds
+from har_analyzer.core.metrics import PerformanceMetrics
 
 
 class TestPerformanceMetrics:

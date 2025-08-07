@@ -1,12 +1,12 @@
 """Unit tests for HAR parser."""
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from har_analyzer.core.parser import HARParser
 from har_analyzer.utils.exceptions import (
-    HARParsingError,
     InvalidHARFileError,
     ValidationError,
 )

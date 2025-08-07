@@ -1,13 +1,12 @@
 """Test configuration and fixtures."""
 
 import json
-import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
-import pytest
 import pandas as pd
+import pytest
 
 from har_analyzer.config import HARAnalyzerConfig
 
