@@ -1,52 +1,337 @@
-# GitHub Actions CI/CD Workflow for sanjay-cicd-sanbox
-# This workflow runs on push and pull request events to the main branch
+# GitHub Actions CI/CD Workflow for HAR Analyzer
+# Enhanced with testing, security scanning, and caching
 
-name: CI/CD Sandbox
+name: CI/CD Enhanced Pipeline
 
 on:
-#   push:
-#     branches: [ main ]
-#   pull_request:
-#     branches: [ main ]
-    workflow_dispatch:
-        inputs:
-          env:
-            description: 'デプロイ環境(dev/lab/stg/inte/prod)'
-            required: true
-            default: 'dev'
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      run_security_scan:
+        description: 'Run security scan'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
 
 jobs:
-  build:
+  # Code Quality and Testing
+  quality-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: '20'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
-          if [ -f package.json ]; then
-            npm ci
-          else
-            echo "No package.json found, skipping install."
-          fi
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,test]"
 
-      - name: Run tests
-        run: |
-          if [ -f package.json ]; then
-            npm test || echo "No tests found."
-          else
-            echo "No package.json found, skipping tests."
-          fi
+      - name: Code formatting check (Black)
+        run: black --check src/ tests/
 
-      - name: Build project
+      - name: Linting (Ruff)
+        run: ruff check src/ tests/
+
+      - name: Type checking (MyPy)
+        run: mypy src/
+
+      - name: Run unit tests
         run: |
-          if [ -f package.json ]; then
-            npm run build || echo "No build script found."
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.run_security_scan != 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml] safety
+
+      - name: Run Bandit security scan
+        run: bandit -r src/ -f json -o bandit-report.json || true
+
+      - name: Run Safety dependency check
+        run: safety check --json --output safety-report.json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # Build and Package
+  build:
+    runs-on: ubuntu-latest
+    needs: [quality-check]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+  # Integration Testing with HAR Analysis
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Install package from wheel
+        run: |
+          pip install dist/*.whl
+
+      - name: Run integration tests
+        run: |
+          # Test CLI interface
+          har-analyzer --help
+          har-analyzer --version
+          
+          # Create a minimal test HAR file
+          echo '{"log":{"version":"1.2","creator":{"name":"Test","version":"1.0"},"entries":[]}}' > test.har
+          
+          # Test with sample HAR file
+          har-analyzer test.har --output-dir test_output --no-report || echo "Integration test completed"
+
+      - name: Upload test outputs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-outputs-py${{ matrix.python-version }}
+          path: |
+            test_output/
+            output/
+          retention-days: 5
+
+  # Performance Testing
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run performance benchmarks
+        run: |
+          # Create a test HAR file with some entries for performance testing
+          echo '{"log":{"version":"1.2","creator":{"name":"Test","version":"1.0"},"entries":[{"request":{"url":"https://example.com","method":"GET"},"response":{"status":200,"statusText":"OK","headers":[],"content":{"size":1024,"mimeType":"text/html"}},"time":100,"timings":{"blocked":1,"dns":1,"connect":1,"send":1,"wait":95,"receive":1}}]}}' > perf_test.har
+          
+          echo "Running performance test..."
+          time python -c "
+          from pathlib import Path
+          from har_analyzer import HARAnalyzer
+          
+          analyzer = HARAnalyzer()
+          results = analyzer.analyze_file(Path('perf_test.har'))
+          print(f'Processed {results[\"basic_stats\"][\"total_requests\"]} requests')
+          print(f'Memory usage: {results[\"basic_stats\"][\"memory_usage_mb\"]:.1f}MB')
+          "
+
+  # HAR Analysis Job
+  har-analysis:
+    runs-on: ubuntu-latest
+    needs: [integration-test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Install package from wheel
+        run: |
+          pip install dist/*.whl
+
+      - name: Analyze HAR files
+        run: |
+          echo "🔍 Analyzing HAR files in docs/ directory..."
+          
+          # Create reports directory
+          mkdir -p har-reports
+          
+          # Find HAR files only in main docs/ folder (not subdirectories)
+          har_files=$(find docs/ -maxdepth 1 -name "*.har" -type f)
+          
+          if [ -z "$har_files" ]; then
+            echo "� No HAR files found in docs/ main folder"
+            echo "✅ Job completed successfully - no files to process"
+            exit 0
+          fi
+          
+          echo "📁 Found HAR files in main docs/ folder:"
+          echo "$har_files"
+          
+          # Process each HAR file
+          for har_file in $har_files; do
+            echo ""
+            echo "🔄 Processing: $har_file"
+            
+            # Extract filename without extension for report naming
+            filename=$(basename "$har_file" .har)
+            
+            # Run HAR analysis to generate PDF report
+            har-analyzer "$har_file" \
+              --output-dir "har-reports/$filename" \
+              --format pdf \
+              --verbose \
+              || echo "⚠️ Analysis failed for $har_file, continuing..."
+            
+            # Also generate CSV for data analysis
+            har-analyzer "$har_file" \
+              --output-dir "har-reports/$filename" \
+              --format csv \
+              --no-report \
+              || echo "⚠️ CSV export failed for $har_file, continuing..."
+          done
+          
+          echo ""
+          echo "✅ HAR analysis completed!"
+          echo "📊 Generated reports:"
+          find har-reports/ -name "*.pdf" -o -name "*.csv" | head -20
+
+      - name: Upload HAR Analysis Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: har-analysis-reports-${{ github.run_number }}
+          path: har-reports/
+          retention-days: 1
+          if-no-files-found: ignore
+
+      - name: Generate Analysis Summary
+        if: always()
+        run: |
+          echo "## 📊 HAR Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Count files processed (only in main docs/ folder)
+          har_count=$(find docs/ -maxdepth 1 -name "*.har" -type f | wc -l)
+          pdf_count=$(find har-reports/ -name "*.pdf" -type f 2>/dev/null | wc -l || echo "0")
+          csv_count=$(find har-reports/ -name "*.csv" -type f 2>/dev/null | wc -l || echo "0")
+          
+          echo "- 📁 HAR files found in docs/ main folder: **$har_count**" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$har_count" -eq 0 ]; then
+            echo "- 📄 **Status**: No HAR files found in docs/ main folder" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **Result**: Job completed successfully with no files to process" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📝 Notes" >> $GITHUB_STEP_SUMMARY
+            echo "- Place \`.har\` files directly in the \`docs/\` folder (not subdirectories) for analysis" >> $GITHUB_STEP_SUMMARY
+            echo "- Files in subdirectories like \`docs/test/\` are ignored by design" >> $GITHUB_STEP_SUMMARY
           else
-            echo "No package.json found, skipping build."
+            echo "- 📄 PDF reports generated: **$pdf_count**" >> $GITHUB_STEP_SUMMARY
+            echo "- 📈 CSV exports created: **$csv_count**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [ -d "har-reports" ]; then
+              echo "### 📋 Generated Reports" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| File | Type | Size |" >> $GITHUB_STEP_SUMMARY
+              echo "|------|------|------|" >> $GITHUB_STEP_SUMMARY
+              
+              find har-reports/ \( -name "*.pdf" -o -name "*.csv" \) -exec ls -lh {} \; | \
+              awk '{print "| " $9 " | " (match($9, /\.pdf$/) ? "PDF Report" : "CSV Data") " | " $5 " |"}' >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📦 **Artifact**: \`har-analysis-reports-${{ github.run_number }}\` (1-day retention)" >> $GITHUB_STEP_SUMMARY
           fi

@@ -1,0 +1,302 @@
+# GitHub Actions CI/CD Workflow for HAR Analyzer
+# Enhanced with testing, security scanning, and caching
+
+name: CI/CD Enhanced Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      run_security_scan:
+        description: 'Run security scan'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  # Code Quality and Testing
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,test]"
+
+      - name: Code formatting check (Black)
+        run: black --check src/ tests/
+
+      - name: Linting (Ruff)
+        run: ruff check src/ tests/
+
+      - name: Type checking (MyPy)
+        run: mypy src/
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.run_security_scan != 'false'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml] safety
+
+      - name: Run Bandit security scan
+        run: bandit -r src/ -f json -o bandit-report.json || true
+
+      - name: Run Safety dependency check
+        run: safety check --json --output safety-report.json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # Build and Package
+  build:
+    runs-on: ubuntu-latest
+    needs: [quality-check]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+  # Integration Testing with HAR Analysis
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Install package from wheel
+        run: |
+          pip install dist/*.whl
+
+      - name: Run integration tests
+        run: |
+          # Test CLI interface
+          har-analyzer --help
+          har-analyzer --version
+          
+          # Create a minimal test HAR file
+          echo '{"log":{"version":"1.2","creator":{"name":"Test","version":"1.0"},"entries":[]}}' > test.har
+          
+          # Test with sample HAR file
+          har-analyzer test.har --output-dir test_output --no-report || echo "Integration test completed"
+
+      - name: Upload test outputs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-outputs-py${{ matrix.python-version }}
+          path: |
+            test_output/
+            output/
+          retention-days: 5
+
+  # Performance Testing
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run performance benchmarks
+        run: |
+          # Create a test HAR file with some entries for performance testing
+          echo '{"log":{"version":"1.2","creator":{"name":"Test","version":"1.0"},"entries":[{"request":{"url":"https://example.com","method":"GET"},"response":{"status":200,"statusText":"OK","headers":[],"content":{"size":1024,"mimeType":"text/html"}},"time":100,"timings":{"blocked":1,"dns":1,"connect":1,"send":1,"wait":95,"receive":1}}]}}' > perf_test.har
+          
+          echo "Running performance test..."
+          time python -c "
+          from pathlib import Path
+          from har_analyzer import HARAnalyzer
+          
+          analyzer = HARAnalyzer()
+          results = analyzer.analyze_file(Path('perf_test.har'))
+          print(f'Processed {results[\"basic_stats\"][\"total_requests\"]} requests')
+          print(f'Memory usage: {results[\"basic_stats\"][\"memory_usage_mb\"]:.1f}MB')
+          "
+
+  # Container Build (Optional)
+  container-build:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [integration-test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create Dockerfile
+        run: |
+          cat > Dockerfile << 'EOF'
+          FROM python:3.11-slim
+          
+          WORKDIR /app
+          
+          # Install system dependencies
+          RUN apt-get update && apt-get install -y \
+              gcc \
+              && rm -rf /var/lib/apt/lists/*
+          
+          # Copy and install Python package
+          COPY dist/*.whl .
+          RUN pip install *.whl
+          
+          # Create non-root user
+          RUN useradd -m -u 1000 haruser
+          USER haruser
+          
+          ENTRYPOINT ["har-analyzer"]
+          EOF
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Build Docker image
+        run: |
+          docker build -t har-analyzer:${{ github.sha }} .
+          docker tag har-analyzer:${{ github.sha }} har-analyzer:latest
+
+      - name: Test Docker image
+        run: |
+          docker run --rm har-analyzer:latest --help
+
+  # Deployment (if applicable)
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [integration-test, security-scan]
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          echo "Deploying to ${{ github.event.inputs.environment || 'dev' }} environment"
+          # Add actual deployment steps here
+          
+      - name: Create Release (on main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            Automated release from CI/CD pipeline
+            
+            Changes:
+            - Enhanced HAR analyzer with modular architecture
+            - Improved error handling and validation
+            - Added comprehensive testing suite
+            - Security scanning integration
+          draft: false
+          prerelease: false

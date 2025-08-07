@@ -1,0 +1,25 @@
+# HAR Analyzer Configuration File
+# This file contains default settings for the HAR analyzer
+
+# Performance thresholds for grading
+thresholds:
+  a_plus: 200          # A+ grade threshold (ms)
+  b: 400              # B grade threshold (ms) 
+  c: 800              # C grade threshold (ms)
+  p95_a_plus: 500     # A+ 95th percentile threshold (ms)
+  p95_b: 1000         # B 95th percentile threshold (ms)
+  p95_c: 2000         # C 95th percentile threshold (ms)
+
+# Report generation settings
+report:
+  format: "pdf"        # Output format (pdf, json, csv)
+  page_size: "A4"     # Page size for PDF reports
+  include_timeline: true
+  include_percentiles: true
+  top_n_resources: 5   # Number of top resources to show
+
+# General settings
+input_file: null       # Default HAR file (null = auto-detect)
+output_dir: "output"   # Output directory for reports
+debug: false          # Enable debug logging
+max_memory_mb: 1024   # Maximum memory usage in MB
